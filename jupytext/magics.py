@@ -4,40 +4,11 @@ import re
 from .stringparser import StringParser
 from .languages import _SCRIPT_EXTENSIONS
 
-# Line magics retrieved manually (Aug 18) with %lsmagic
-_LINE_MAGICS = '%alias  %alias_magic  %autocall  %automagic  %autosave  ' \
-               '%bookmark  %cd  %clear  %cls  %colors  %config  ' \
-               '%connect_info  %copy  %ddir  %debug  %dhist  %dirs  ' \
-               '%doctest_mode  %echo  %ed  %edit  %env  %gui  %hist  ' \
-               '%history  %killbgscripts  %ldir  %less  %load  %load_ext  ' \
-               '%loadpy  %logoff  %logon  %logstart  %logstate  %logstop  ' \
-               '%ls  %lsmagic  %macro  %magic  %matplotlib  %mkdir  %more  ' \
-               '%notebook  %page  %pastebin  %pdb  %pdef  %pdoc  %pfile  ' \
-               '%pinfo  %pinfo2  %popd  %pprint  %precision  %profile  ' \
-               '%prun  %psearch  %psource  %pushd  %pwd  %pycat  %pylab  ' \
-               '%qtconsole  %quickref  %recall  %rehashx  %reload_ext  ' \
-               '%ren  %rep  %rerun  %reset  %reset_selective  %rmdir  %run  ' \
-               '%save  %sc  %set_env  %store  %sx  %system  %tb  %time  ' \
-               '%timeit  %unalias  %unload_ext  %who  %who_ls  %whos  ' \
-               '%xdel  %xmode'.split('  ')
-
-# Add classical line magics
-_LINE_MAGICS += ('%autoreload %aimport '  # autoreload
-                 '%R %Rpush %Rpull %Rget '  # rmagic
-                 '%store '  # storemagic
-                 ).split(' ')
-
-# Remove any blank line
-_LINE_MAGICS = [magic for magic in _LINE_MAGICS if magic.startswith('%')]
-
 # A magic expression is a line or cell magic escaped zero, or multiple times
-_FORCE_ESC_RE = {_SCRIPT_EXTENSIONS[ext]['language']: re.compile(
-    r"^({0} |{0})*%(.*)({0}| )escape".format(_SCRIPT_EXTENSIONS[ext]['comment'])) for ext in _SCRIPT_EXTENSIONS}
-_FORCE_NOT_ESC_RE = {_SCRIPT_EXTENSIONS[ext]['language']: re.compile(
-    r"^({0} |{0})*%(.*)({0}| )noescape".format(_SCRIPT_EXTENSIONS[ext]['comment'])) for ext in _SCRIPT_EXTENSIONS}
 _MAGIC_RE = {_SCRIPT_EXTENSIONS[ext]['language']: re.compile(
-    r"^({0} |{0})*(%%[a-zA-Z]|{1})".format(
-        _SCRIPT_EXTENSIONS[ext]['comment'], '|'.join(_LINE_MAGICS))) for ext in _SCRIPT_EXTENSIONS}
+    r"^({0} |{0})*(%|%%)[a-zA-Z]".format(_SCRIPT_EXTENSIONS[ext]['comment'])) for ext in _SCRIPT_EXTENSIONS}
+_MAGIC_NOT_ESC_RE = {_SCRIPT_EXTENSIONS[ext]['language']: re.compile(
+    r"^({0} |{0})*(%|%%)[a-zA-Z](.*){0}\s*noescape".format(_SCRIPT_EXTENSIONS[ext]['comment'])) for ext in _SCRIPT_EXTENSIONS}
 _COMMENT = {_SCRIPT_EXTENSIONS[ext]['language']: _SCRIPT_EXTENSIONS[ext]['comment'] for ext in _SCRIPT_EXTENSIONS}
 
 # Commands starting with a question marks have to be escaped
@@ -46,10 +17,8 @@ _HELP_RE = re.compile(r"^(# |#)*\?")
 
 def is_magic(line, language):
     """Is the current line a (possibly escaped) Jupyter magic?"""
-    if _FORCE_ESC_RE.get(language, _FORCE_ESC_RE['python']).match(line):
-        return True
-    if not _FORCE_NOT_ESC_RE.get(language, _FORCE_ESC_RE['python']).match(line) and \
-            _MAGIC_RE.get(language, _FORCE_ESC_RE['python']).match(line):
+    if not _MAGIC_NOT_ESC_RE.get(language, _MAGIC_NOT_ESC_RE['python']).match(line) and \
+            _MAGIC_RE.get(language, _MAGIC_RE['python']).match(line):
         return True
     if language == 'python':
         return _HELP_RE.match(line)

@@ -19,7 +19,7 @@ def test_escape(line):
     assert uncomment_magic(comment_magic([line])) == [line]
 
 
-@pytest.mark.parametrize('line', ['%pytest.fixture'])
+@pytest.mark.parametrize('line', ['@pytest.fixture'])
 def test_escape_magic_only(line):
     assert comment_magic([line]) == [line]
 
@@ -27,11 +27,6 @@ def test_escape_magic_only(line):
 @pytest.mark.parametrize('line', ['%matplotlib inline #noescape'])
 def test_force_noescape(line):
     assert comment_magic([line]) == [line]
-
-
-@pytest.mark.parametrize('line', ['%pytest.fixture #escape'])
-def test_force_escape(line):
-    assert comment_magic([line]) == ['# ' + line]
 
 
 @pytest.mark.parametrize('ext_and_format_name,commented',
