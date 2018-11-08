@@ -4,13 +4,18 @@ import pytest
 from testfixtures import compare
 import mock
 from nbformat.v4.nbbase import new_notebook
-from jupytext import header
+from jupytext import header, __version__
 from jupytext import readf, writef, writes
 from jupytext.cli import convert_notebook_files, cli_jupytext, jupytext
 from jupytext.compare import compare_notebooks
 from .utils import list_notebooks
 
 header.INSERT_AND_CHECK_VERSION_NUMBER = False
+
+
+def test_cli_no_argument():
+    with pytest.raises(ValueError):
+        cli_jupytext([])
 
 
 @pytest.mark.parametrize('nb_file', list_notebooks())
@@ -48,6 +53,14 @@ def test_convert_single_file(nb_file, capsys):
     out, err = capsys.readouterr()
     assert err == ''
     compare(out, pynb)
+
+
+def test_jupytext_version(capsys):
+    jupytext(['--version'])
+
+    out, err = capsys.readouterr()
+    assert err == ''
+    compare(out, __version__ + '\n')
 
 
 @pytest.mark.parametrize('nb_file', list_notebooks('ipynb_cpp'))
@@ -99,7 +112,7 @@ def test_error_not_notebook_ext_output(
 
 
 def test_error_no_ext(nb_file=list_notebooks()[0]):
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         cli_jupytext([nb_file])
 
 
@@ -204,7 +217,7 @@ def test_convert_to_percent_format(nb_file, tmpdir):
 
     with open(tmp_nbpy) as stream:
         py_script = stream.read()
-        assert 'py:percent' in py_script
+        assert 'format_name: percent' in py_script
 
     nb1 = readf(tmp_ipynb)
     nb2 = readf(tmp_nbpy)

@@ -12,6 +12,7 @@ R Markdown notebooks.
 
 from .jupytext import readf, writef, writes, reads
 from .formats import NOTEBOOK_EXTENSIONS, guess_format, get_format
+from .version import __version__
 
 try:
     from .contentsmanager import TextFileContentsManager
@@ -25,4 +26,4 @@ except ImportError as err:
 
 __all__ = ['readf', 'writef', 'writes', 'reads',
            'NOTEBOOK_EXTENSIONS', 'guess_format', 'get_format',
-           'TextFileContentsManager']
+           'TextFileContentsManager', '__version__']

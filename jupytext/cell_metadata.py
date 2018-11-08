@@ -26,10 +26,14 @@ except NameError:
 
 _BOOLEAN_OPTIONS_DICTIONARY = [('hide_input', 'echo', True),
                                ('hide_output', 'include', True)]
-_IGNORE_METADATA = ['collapsed', 'autoscroll', 'scrolled',
-                    'deletable', 'format', 'trusted', 'skipline',
-                    'noskipline', 'lines_to_next_cell',
-                    'lines_to_end_of_cell_marker']
+_IGNORE_CELL_METADATA = ','.join('-{}'.format(name) for name in [
+    # Frequent cell metadata that should not enter the text representation
+    # (these metadata are preserved in the paired Jupyter notebook).
+    'autoscroll', 'collapsed', 'scrolled', 'trusted', 'ExecuteTime',
+    # Pre-jupytext metadata
+    'skipline', 'noskipline',
+    # Jupytext metadata
+    'cell_marker', 'lines_to_next_cell', 'lines_to_end_of_cell_marker'])
 _PERCENT_CELL = re.compile(
     r'(# |#)%%([^\{\[]*)(|\[raw\]|\[markdown\])([^\{\[]*)(|\{.*\})\s*$')
 
@@ -64,7 +68,6 @@ def metadata_to_rmd_options(language, metadata):
     :return:
     """
     options = (language or 'R').lower()
-    metadata = filter_metadata(metadata)
     if 'name' in metadata:
         options += ' ' + metadata['name'] + ','
         del metadata['name']
@@ -233,9 +236,6 @@ def rmd_options_to_metadata(options):
         else:
             if update_metadata_from_rmd_options(name, value, metadata):
                 continue
-            if name == 'active':
-                metadata[name] = value.replace('"', '').replace("'", '')
-                continue
             try:
                 metadata[name] = _py_logical_values(value)
                 continue
@@ -245,10 +245,10 @@ def rmd_options_to_metadata(options):
     for name in metadata:
         try_eval_metadata(metadata, name)
 
-    if 'active' in metadata and 'eval' in metadata:
+    if ('active' in metadata or metadata.get('run_control', {}).get('frozen') is True) and 'eval' in metadata:
         del metadata['eval']
 
-    return language, metadata
+    return metadata.get('language') or language, metadata
 
 
 def md_options_to_metadata(options):
@@ -263,7 +263,7 @@ def md_options_to_metadata(options):
         language = options[0]
 
     if language:
-        for lang in _JUPYTER_LANGUAGES:
+        for lang in _JUPYTER_LANGUAGES + ['julia', 'scheme', 'c++']:
             if language.lower() == lang.lower():
                 if name:
                     return lang, {'name': name}
@@ -279,7 +279,9 @@ def try_eval_metadata(metadata, name):
     value = metadata[name]
     if not isinstance(value, (str, unicode)):
         return
-    if value.startswith('"') or value.startswith("'"):
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        if name in ['active', 'magic_args', 'language']:
+            metadata[name] = value[1:-1]
         return
     if value.startswith('c(') and value.endswith(')'):
         value = '[' + value[2:-1] + ']'
@@ -300,11 +302,6 @@ def json_options_to_metadata(options, add_brackets=True):
         return {}
 
 
-def filter_metadata(metadata):
-    """Filter technical metadata"""
-    return {k: metadata[k] for k in metadata if k not in _IGNORE_METADATA}
-
-
 def metadata_to_json_options(metadata):
     """Represent metadata as json text"""
     return json.dumps(metadata)
@@ -312,6 +309,8 @@ def metadata_to_json_options(metadata):
 
 def is_active(ext, metadata):
     """Is the cell active for the given file extension?"""
+    if metadata.get('run_control', {}).get('frozen') is True:
+        return False
     if 'active' not in metadata:
         return True
     return ext.replace('.', '') in re.split('\\.|,', metadata['active'])
@@ -319,7 +318,15 @@ def is_active(ext, metadata):
 
 def double_percent_options_to_metadata(options):
     """Parse double percent options"""
-    matches = _PERCENT_CELL.findall('# %%' + options)[0]
+    matches = _PERCENT_CELL.findall('# %%' + options)
+
+    # Fail safe when regexp matching fails #116
+    # (occurs e.g. if square brackets are found in the title)
+    if not matches:
+        return {'title': options.strip()}
+
+    matches = matches[0]
+
     # Fifth match are JSON metadata
     if matches[4]:
         metadata = json_options_to_metadata(matches[4], add_brackets=False)
@@ -335,7 +342,15 @@ def double_percent_options_to_metadata(options):
     title = [matches[i].strip() for i in [1, 3]]
     title = [part for part in title if part]
     if title:
-        metadata['title'] = ' '.join(title)
+        title = ' '.join(title)
+        cell_depth = 0
+        while title.startswith('%'):
+            cell_depth += 1
+            title = title[1:]
+
+        if cell_depth:
+            metadata['cell_depth'] = cell_depth
+        metadata['title'] = title.strip()
 
     return metadata
 
@@ -343,6 +358,8 @@ def double_percent_options_to_metadata(options):
 def metadata_to_double_percent_options(metadata):
     """Metadata to double percent lines"""
     options = []
+    if 'cell_depth' in metadata:
+        options.append('%' * metadata.pop('cell_depth'))
     if 'title' in metadata:
         options.append(metadata.pop('title'))
     if 'cell_type' in metadata:

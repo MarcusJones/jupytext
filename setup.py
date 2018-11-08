@@ -1,14 +1,20 @@
 from os import path
 from io import open
+import re
 from setuptools import setup, find_packages
 
 this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+with open(path.join(this_directory, 'jupytext/version.py')) as f:
+    version_file = f.read()
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", version_file, re.M)
+    version = version_match.group(1)
+
 setup(
     name='jupytext',
-    version='0.7.2',
+    version=version,
     author='Marc Wouts',
     author_email='marc.wouts@gmail.com',
     description='Jupyter notebooks as Markdown documents, '
